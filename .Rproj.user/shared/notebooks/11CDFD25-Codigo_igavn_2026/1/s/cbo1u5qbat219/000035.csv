@@ -1,0 +1,3 @@
+"0",""
+"0","# Exportar a Word"
+"0","#Tabla_1 %>% as_flex_table() %>% flextable::save_as_docx(path = ""Tabla_1.docx"")"

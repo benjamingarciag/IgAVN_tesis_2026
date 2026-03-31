@@ -1,0 +1,5 @@
+"0","datos <- readr::read_csv(""igavn_2026.csv"")"
+"0",""
+"0","# Explorción inicial para ver que se necesita arrgelar"
+"0","# glimpse(datos)"
+"0","# summary(datos)"

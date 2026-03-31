@@ -1,0 +1,2 @@
+"0",""
+"0","Tabla_3 %>% as_flex_table() %>% flextable::save_as_docx(path = ""Tabla_3.docx"")"
