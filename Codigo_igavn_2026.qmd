@@ -27,7 +27,7 @@ pacman::p_load(tidyverse, tableone, survival, survminer, gtsummary,flextable,ggs
 ## Datos
 
 ```{r}
-datos <- readr::read_csv("igavn_2026.csv")
+datos <- readr::read_csv("IgAVN_datos_limpios_abril_2026.csv")
 
 # Explorción inicial para ver que se necesita arrgelar
 # glimpse(datos)
@@ -161,7 +161,22 @@ datos_limpios_2 <- datos_limpios %>%
     .cols = all_of(cols_fechas),
     .fns = ~ floor(time_length(interval(fecha_biopsia, .x), "month")),
     .names = "tiempo_{.col}"
-  ))
+  )) %>% 
+  mutate(
+    tiempo_fecha_nacimiento = floor(abs(tiempo_fecha_nacimiento)/12),
+    tiempo_fecha_sintomas = abs(tiempo_fecha_sintomas)
+  )
+
+```
+
+## Crear variable de RIESGO
+
+```{r}
+# 
+
+
+
+
 ```
 
 ## Tabla de características clínicas
@@ -325,11 +340,93 @@ Tabla_3 <- datos_limpios %>%
 Tabla_3
 
 Tabla_3 %>% as_flex_table() %>% flextable::save_as_docx(path = "Tabla_3.docx")
+
+```
+
+## Fenotipos
+
+```{r}
+
+# ==============================================================================
+# CLUSTERING JERÁRQUICO: INTENTO 2 (Sin sexo, con Oxford C)
+# ==============================================================================
+
+# 1. Cargar librerías (si no están cargadas)
+library(tidyverse)
+library(pheatmap)
+
+# 2. Seleccionar SOLO las 5 variables de interés (Combo: Función + Glomérulo + Túbulo)
+# Asegúrate de que "oxford_C" esté escrito exactamente igual que en tu base
+datos_cluster <- datos_limpios %>%
+  select(ckd_epi, ipc, oxford_C, fibrosis_intersiticial, infiltrado_inflamatorio)
+
+# 3. Limpieza y Preprocesamiento
+
+# A. Tratamiento de Oxford C (IMPORTANTE)
+# Para que el clustering funcione, Oxford C debe ser numérico (0, 1, 2).
+datos_cluster$oxford_C <- as.numeric(datos_cluster$oxford_C)
+
+# B. Quitar filas con datos faltantes (NA)
+datos_cluster <- na.omit(datos_cluster)
+
+# C. ESCALAR LOS DATOS (Z-scores)
+datos_escalados <- scale(datos_cluster)
+
+# Verificamos que todo sea numérico y luzca bien
+head(datos_escalados)
+
+# 4. Generar el Heatmap Visual
+pheatmap(datos_escalados,
+         scale = "none",             
+         clustering_distance_rows = "euclidean",
+         clustering_method = "ward.D2",
+         cutree_rows = 4,            # Mantenemos 3 cortes para ver qué sale
+         show_rownames = FALSE,      
+         main = "Fenotipos NVIgA")
+
+# ==============================================================================
+# EXTRACCIÓN DE LOS FENOTIPOS
+# ==============================================================================
+
+# 1. Calcular distancias y árbol
+dist_mat <- dist(datos_escalados, method = "euclidean")
+hclust_avg <- hclust(dist_mat, method = "ward.D2")
+
+# 2. Cortar el árbol en 3 grupos
+grupos_pacientes <- cutree(hclust_avg, k = 4)
+
+# 3. Asignar el fenotipo a los pacientes
+datos_cluster_final <- datos_cluster %>%
+  mutate(Fenotipo = as.factor(grupos_pacientes))
+
+# Conteo rápido: ¿Cuántos quedaron en cada grupo?
+table(datos_cluster_final$Fenotipo)
+
+# ==============================================================================
+# TABLA DE CARACTERIZACIÓN (TABLA 1 SIMULADA)
+# ==============================================================================
+
+datos_cluster_final %>%
+  group_by(Fenotipo) %>%
+  summarise(
+    n = n(),
+    Media_TFGe = mean(ckd_epi),
+    Media_Proteinuria = mean(ipc),
+    Media_Semilunas_C = mean(oxford_C),  # Aquí veremos qué grupo es el "Activo"
+    Media_Fibrosis = mean(fibrosis_intersiticial),
+    Media_Infiltrado = mean(infiltrado_inflamatorio)
+  )
 ```
 
 ```{r}
-datos_limpios %>% 
-  filter(sx_glomerular == "Hematuria_proteinuria") %>% 
-  summary
-
+datos_fenotipos_3 <- datos_limpios_2 %>%
+  # Convertimos las sospechosas a número
+  mutate(
+    oxford_C = as.numeric(as.character(oxford_C)),
+    ckd_epi = as.numeric(as.character(ckd_epi)),
+    prot_U24hrs = as.numeric(as.character(prot_U24hrs))
+  ) %>%
+  select(registro, hospital, prot_U24hrs, ckd_epi, oxford_C, 
+         desenlace_agrupado, tiempo_fecha_desenlace, edad_a_biopsia) %>%
+  filter(ckd_epi < 80, prot_U24hrs > 2.5)
 ```
